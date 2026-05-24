@@ -55,7 +55,7 @@ body{font-family:'Nunito','Baloo 2',sans-serif;background:#1a0a2e;min-height:100
 #gameScreen{padding-top:.6rem;padding-bottom:max(5rem,calc(5rem + env(safe-area-inset-bottom)));background:#1a0a2e;animation:none;align-items:stretch;}
 .game-top{width:100%;max-width:1400px;margin:0 auto .4rem;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.4rem;padding:0 .25rem;}
 .game-player{font-size:.82rem;font-weight:800;color:#ffb890;}
-.progress-wrap{width:100%;max-width:1400px;margin:0 auto .45rem;background:rgba(255,107,53,.12);border:1px solid rgba(255,215,0,.18);border-radius:10px;overflow:hidden;height:8px;}
+.progress-wrap{width:100%;max-width:1400px;margin:0 auto .45rem;background:rgba(255,107,53,.12);border:1px solid rgba(255,215,0,.18);border-radius:10px;overflow:hidden;height:8px;pointer-events:none;user-select:none;-webkit-user-select:none;}
 .progress-bar{height:100%;background:linear-gradient(90deg,#ff6b35,#ffd700);border-radius:10px;transition:width .4s}
 .game-layout{width:100%;max-width:1400px;margin:0 auto;display:flex;gap:clamp(8px,1.5vw,16px);align-items:flex-start;}
 
@@ -452,7 +452,14 @@ function getMobileTA() {
   });
   mobileTA.addEventListener('blur', () => {
     // brief delay so a tap on another cell can re-focus
-    setTimeout(()=>{ if(mobileR!==null && document.activeElement!==mobileTA) setActiveCell(mobileR,mobileC); }, 80);
+    // Don't re-focus if user tapped a button or clue item
+    setTimeout(()=>{
+      if(mobileR!==null && document.activeElement!==mobileTA) {
+        const activeEl = document.activeElement;
+        if (activeEl && (activeEl.tagName==='BUTTON' || activeEl.classList.contains('clue-item'))) return;
+        setActiveCell(mobileR,mobileC);
+      }
+    }, 80);
   });
   return mobileTA;
 }
@@ -662,12 +669,14 @@ function renderClues() {
     div.addEventListener('click', () => {
       highlight(w);
       // focus first empty cell
+      let targetR = w.r, targetC = w.c;
       for (let i=0;i<w.w.length;i++) {
         const r = w.d==='down'? w.r+i : w.r;
         const c = w.d==='across'? w.c+i : w.c;
-        if (!(userMap[`${r},${c}`])) { focusCell(r,c); return; }
+        if (!(userMap[`${r},${c}`])) { targetR=r; targetC=c; break; }
       }
-      focusCell(w.r, w.c);
+      // Small delay so the blur event from mobileTA doesn't fight us
+      setTimeout(() => { focusCell(targetR, targetC); }, 50);
     });
     (w.d==='across'?acrossEl:downEl).appendChild(div);
   });
@@ -740,7 +749,12 @@ document.getElementById('btnStart').addEventListener('click', () => {
   document.getElementById('bubble').textContent = 'Vamos lá, ' + playerName + '! 🎈';
   requestAnimationFrame(()=>requestAnimationFrame(buildGrid));
 });
-document.getElementById('btn-restart').addEventListener('click', ()=>{ buildGrid(); showBub('Novo jogo! Bora lá! 🎈'); });
+document.getElementById('btn-restart').addEventListener('click', ()=>{
+  if (solved.size > 0) {
+    if (!confirm('Tens ' + solved.size + ' palavra(s) descoberta(s). Tens a certeza que queres começar de novo?')) return;
+  }
+  buildGrid(); showBub('Novo jogo! Bora lá! 🎈');
+});
 document.getElementById('btn-menu').addEventListener('click', goMenu);
 document.getElementById('btnWinRestart').addEventListener('click', ()=>{ stopConf(); document.getElementById('winOverlay').classList.remove('active'); document.getElementById('gameScreen').classList.add('active'); buildGrid(); });
 document.getElementById('btnWinMenu').addEventListener('click', ()=>{ stopConf(); goMenu(); });
