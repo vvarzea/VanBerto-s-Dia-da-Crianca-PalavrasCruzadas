@@ -55,7 +55,7 @@ body{font-family:'Nunito','Baloo 2',sans-serif;background:#1a0a2e;min-height:100
 #gameScreen{padding-top:.6rem;padding-bottom:max(5rem,calc(5rem + env(safe-area-inset-bottom)));background:#1a0a2e;animation:none;align-items:stretch;}
 .game-top{width:100%;max-width:1400px;margin:0 auto .4rem;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.4rem;padding:0 .25rem;}
 .game-player{font-size:.82rem;font-weight:800;color:#ffb890;}
-.progress-wrap{width:100%;max-width:1400px;margin:0 auto .45rem;background:rgba(255,107,53,.12);border:1px solid rgba(255,215,0,.18);border-radius:10px;overflow:hidden;height:8px;pointer-events:none;user-select:none;-webkit-user-select:none;}
+.progress-wrap{width:100%;max-width:1400px;margin:0 auto .45rem;background:rgba(255,107,53,.12);border:1px solid rgba(255,215,0,.18);border-radius:10px;overflow:hidden;height:8px;pointer-events:none!important;user-select:none;-webkit-user-select:none;touch-action:none;}
 .progress-bar{height:100%;background:linear-gradient(90deg,#ff6b35,#ffd700);border-radius:10px;transition:width .4s}
 .game-layout{width:100%;max-width:1400px;margin:0 auto;display:flex;gap:clamp(8px,1.5vw,16px);align-items:flex-start;}
 
@@ -391,11 +391,10 @@ function buildGrid() {
         inp.setAttribute('autocorrect','off');
         inp.setAttribute('autocapitalize','characters');
         inp.setAttribute('spellcheck','false');
+        inp.setAttribute('readonly','true');
         inp.addEventListener('focus', () => onFocus(r, c));
-        inp.addEventListener('input', e => onInput(e, r, c));
-        inp.addEventListener('keydown', e => onKeydown(e, r, c));
         cell.appendChild(inp);
-        cell.addEventListener('click', (e) => { e.stopPropagation(); activateMobileInput(r, c); });
+        cell.addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); activateMobileInput(r, c); });
       }
       el.appendChild(cell);
     }
@@ -420,7 +419,7 @@ function getMobileTA() {
   mobileTA.setAttribute('autocapitalize','characters');
   mobileTA.setAttribute('spellcheck','false');
   mobileTA.setAttribute('autocomplete','off');
-  mobileTA.style.cssText='position:fixed;opacity:0;pointer-events:none;width:1px;height:1px;top:50%;left:50%;transform:translate(-50%,-50%);font-size:16px;border:none;outline:none;z-index:9999;';
+  mobileTA.style.cssText='position:fixed;opacity:0;pointer-events:none;width:1px;height:1px;top:-9999px;left:-9999px;font-size:16px;border:none;outline:none;z-index:9999;overflow:hidden;';
   document.body.appendChild(mobileTA);
   mobileTA.addEventListener('input', e => {
     if (mobileR===null) return;
@@ -444,22 +443,29 @@ function getMobileTA() {
   mobileTA.addEventListener('keydown', e => {
     if (mobileR===null) return;
     if (e.key==='Backspace') {
+      e.preventDefault();
       const inp = getInput(mobileR, mobileC);
       if (inp && !inp.value) { movePrev(mobileR,mobileC); }
-      else if (inp) { inp.value=''; userMap[`${mobileR},${mobileC}`]=''; mobileTA.value=''; e.preventDefault(); }
+      else if (inp) { inp.value=''; userMap[`${mobileR},${mobileC}`]=''; mobileTA.value=''; }
     }
     if (e.key==='Enter') { e.preventDefault(); checkWords(true); }
+    if (e.key==='ArrowRight') { e.preventDefault(); focusCell(mobileR,mobileC+1); }
+    if (e.key==='ArrowLeft')  { e.preventDefault(); focusCell(mobileR,mobileC-1); }
+    if (e.key==='ArrowDown')  { e.preventDefault(); focusCell(mobileR+1,mobileC); }
+    if (e.key==='ArrowUp')    { e.preventDefault(); focusCell(mobileR-1,mobileC); }
   });
   mobileTA.addEventListener('blur', () => {
-    // brief delay so a tap on another cell can re-focus
-    // Don't re-focus if user tapped a button or clue item
+    // Only re-focus if the user didn't tap a button or clue item
     setTimeout(()=>{
-      if(mobileR!==null && document.activeElement!==mobileTA) {
-        const activeEl = document.activeElement;
-        if (activeEl && (activeEl.tagName==='BUTTON' || activeEl.classList.contains('clue-item'))) return;
-        setActiveCell(mobileR,mobileC);
+      if(mobileR===null) return;
+      const activeEl = document.activeElement;
+      if (!activeEl || activeEl===document.body) {
+        // Nothing took focus — keep grid active but don't force re-focus (avoids scroll jump)
+        return;
       }
-    }, 80);
+      if (activeEl.tagName==='BUTTON' || activeEl.classList.contains('clue-item')) return;
+      // Another cell took focus via pointerdown — don't fight it
+    }, 60);
   });
   return mobileTA;
 }
@@ -470,7 +476,8 @@ function activateMobileInput(r, c) {
   onFocus(r, c);
   const ta = getMobileTA();
   ta.value = '';
-  ta.focus();
+  // Use requestAnimationFrame to avoid focus fighting on mobile
+  requestAnimationFrame(() => { ta.focus(); });
 }
 function isMobileDevice() { return /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent) || ('ontouchstart' in window); }
 
@@ -606,8 +613,7 @@ function focusCell(r,c) {
   if (r<0||r>=ROWS||c<MIN_COL||c>=MIN_COL+COLS) return;
   const inp = getInput(r,c);
   if (!inp || inp.disabled) return;
-  if (isMobileDevice()) { activateMobileInput(r,c); }
-  else { inp.focus(); }
+  activateMobileInput(r,c);
 }
 
 /* ══ CHECK WORDS ══ */
